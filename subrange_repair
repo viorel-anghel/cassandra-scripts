@@ -1,0 +1,55 @@
+#!/bin/bash
+
+SLEEP=5 # seconds. sleep between subrange repairs
+
+MYDC=dc1
+FLAG_INDC=''
+KS=mydb1
+
+AUTH='--username cassandra --password cassandra'
+#AUTH='' # if no auth is used
+
+nodetool $AUTH ring $KS | while read L
+do
+
+    # inside my dc
+    if [ "$L" = "Datacenter: $MYDC" ]
+    then
+        FLAG_INDC=1 
+        continue
+    fi
+
+    # outside my dc 
+    if [ "$L" = "Datacenter: " ]
+    then
+        FLAG_INDC=''
+        continue
+    fi
+
+    [ "$FLAG_INDC" ] || continue
+
+    set -- $L
+    [ "$1" ] || continue
+
+    if [[ "x$2" == "x" ]] 
+    then
+       START_TOKEN=$1
+       continue
+    fi
+
+    END_TOKEN=$8
+
+    echo
+    echo analysing line: \"$L\"
+    if [ "$3" = "Up" -a "$4" = "Normal" ]
+    then 
+        echo nodetool repair -pr -st $START_TOKEN -et $END_TOKEN
+             nodetool repair -pr -st $START_TOKEN -et $END_TOKEN
+        sleep $SLEEP
+    else
+        echo "skipping line - node is not UN"
+    fi
+
+    START_TOKEN=$END_TOKEN
+done
+

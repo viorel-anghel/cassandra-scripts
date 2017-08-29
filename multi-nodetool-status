@@ -1,0 +1,40 @@
+#!/bin/bash
+
+# run nodetool status on many nodes via ssh and compare the output
+# it should be the same if the cluster is ok
+
+function reformat_nodetool_output() {
+  while read L
+  do
+    if [[ $L =~ ^Datacenter: ]] 
+    then
+        set -- $L
+        DC=$2
+        continue
+    fi
+
+    if [[ $L =~ ^[UD][NLJM] ]]
+    then
+        #'UN  10.14.23.22  7.15 MiB   256          100.0%            f952af70-852a-4ec0-92a5-36ca2e7d22b1  rack1'
+        set -- $L
+        echo $DC $1 $2 $5 $7 $8
+    fi
+  done
+}
+
+for node in c1 c2 c3 c4
+do
+  echo "node: $node"
+  ssh -n root@$node nodetool status system_auth | reformat_nodetool_output >ns-$node
+
+  if [ "$PREV_NODE" ]
+  then
+      echo -n comparing ns-$PREV_NODE ns-$node
+      cmp ns-$PREV_NODE ns-$node && echo ' OK'
+  fi
+ 
+  PREV_NODE=$node
+  
+done
+
+

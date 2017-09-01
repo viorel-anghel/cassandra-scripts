@@ -3,12 +3,26 @@
 # install cassandra on nodes c1 c2 c3 c4
 # it assumes you can run ssh root@c1 etc
 
+
+# if you need to cleanup the node for a fresh re-install
+# otherwise you can comment out this block
+for node in c1 c2 c3 c4
+do
+    echo  
+    echo "cleaning up node $node"
+    ssh -n root@$node "
+        service cassandra stop
+        apt-get purge -y cassandra cassandra-tools
+        rm -rf /var/lib/cassandra /etc/cassandra /var/log/cassandra "
+done
+
 for node in c1 c2 c3 c4
 do
   echo	
   echo "node: $node"
-  ssh -n root@$node "apt install openjdk-8-jre 
-    echo "deb http://www.apache.org/dist/cassandra/debian 311x main" | tee -a /etc/apt/sources.list.d/cassandra.sources.list 
+
+  ssh -n root@$node "apt-get install openjdk-8-jre 
+    echo "deb http://www.apache.org/dist/cassandra/debian 311x main" >/etc/apt/sources.list.d/cassandra.sources.list 
     curl https://www.apache.org/dist/cassandra/KEYS | apt-key add - 
     apt-get update 
     apt-get install cassandra cassandra-tools
@@ -19,19 +33,25 @@ do
   scp cassandra.yaml root@$node:/etc/cassandra/cassandra.yaml
 
   # make c4 in another datacenter
+  # comment out this block if you want a single DC with 4 nodes
   if [ "$node" = "c4" ] 
   then
       ssh -n root@$node sed -i -e 's/dc1/dc2/' /etc/cassandra/cassandra-rackdc.properties 
   fi
+
   ssh -n root@$node service cassandra start
 
-
-  [ "$node" = "c1" ] && sleep 120
-
+  # wait for each node to come up 
+  echo waiting for node $node
+  #read tmp
+  sleep 120
 done
 
+# we have enabled AUTH in config cassandra.yaml
 ssh -n root@c1 "cqlsh -u cassandra -p cassandra c1 -e \"ALTER KEYSPACE system_auth WITH REPLICATION = {'class' : 'NetworkTopologyStrategy', 'dc1' : 3, 'dc2' : 1 };\""
 
+echo
+echo ssh root@c1 nodetool status
 ssh root@c1 nodetool status
 
 
